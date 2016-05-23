@@ -1107,25 +1107,54 @@ clockid_t clock_boottime_or_monotonic(void) {
                 return CLOCK_MONOTONIC;
 }
 
+void get_localtime_link(char **link_path, char **link_value) {
+        const char localtime_file[] = "/etc/localtime";
+        char *link = NULL, *link2 = NULL;
+
+        const int r = readlink_and_normalize(localtime_file, &link);
+        if (r < 0) {
+                if (link_path)
+                        *link_path = strdup(localtime_file);
+                if (link_value)
+                        *link_value = NULL;
+                return;
+        }
+
+        /* If the link points to a second link, resolve it. */
+        if (path_startswith(link, "/usr/share/zoneinfo/") ||
+                readlink_and_normalize(link, &link2) < 0) {
+                if (link_path)
+                        *link_path = strdup(localtime_file);
+                if (link_value)
+                        *link_value = link;
+                return;
+        }
+
+        if (link_path)
+                *link_path = link;
+        if (link_value)
+                *link_value = link2;
+        return;
+}
+
 int get_timezone(char **tz) {
-        _cleanup_free_ char *t = NULL;
+        _cleanup_free_ char *l = NULL, *t = NULL;
         const char *e;
         char *z;
-        int r;
 
-        r = readlink_malloc("/etc/localtime", &t);
-        if (r < 0)
-                return r; /* returns EINVAL if not a symlink */
+        get_localtime_link(&l, &t);
+        if (!l)
+                return -EINVAL;
 
         e = path_startswith(t, "/usr/share/zoneinfo/");
         if (!e)
-                e = path_startswith(t, "../usr/share/zoneinfo/");
-        if (!e)
                 return -EINVAL;
 
+        /* Check the timezone is valid */
         if (!timezone_is_valid(e))
                 return -EINVAL;
 
+        /* Return a copy */
         z = strdup(e);
         if (!z)
                 return -ENOMEM;

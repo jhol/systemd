@@ -119,6 +119,7 @@ clockid_t clock_boottime_or_monotonic(void);
         assert_message_se(strftime(buf, ELEMENTSOF(buf), fmt, tm) > 0, \
                           "xstrftime: " #buf "[] must be big enough")
 
+void get_localtime_link(char **link_path, char **link_value);
 int get_timezone(char **timezone);
 
 time_t mktime_or_timegm(struct tm *tm, bool utc);

@@ -84,23 +84,35 @@ static int context_read_data(Context *c) {
 }
 
 static int context_write_data_timezone(Context *c) {
-        _cleanup_free_ char *p = NULL;
+        _cleanup_free_ char *link_path = NULL, *link_dir = NULL, *abs_path = NULL, *rel_path = NULL;
         int r = 0;
 
         assert(c);
 
+        get_localtime_link(&link_path, NULL);
+        if (!link_path)
+                return log_oom();
+
         if (isempty(c->zone)) {
-                if (unlink("/etc/localtime") < 0 && errno != ENOENT)
+                if (unlink(link_path) < 0 && errno != ENOENT)
                         r = -errno;
 
                 return r;
         }
 
-        p = strappend("../usr/share/zoneinfo/", c->zone);
-        if (!p)
+        link_dir = dirname_malloc(link_path);
+        if (!link_dir)
                 return log_oom();
 
-        r = symlink_atomic(p, "/etc/localtime");
+        abs_path = strappend("/usr/share/zoneinfo/", c->zone);
+        if (!abs_path)
+                return log_oom();
+
+        r = path_make_relative(link_dir, abs_path, &rel_path);
+        if (r < 0)
+                return r;
+
+        r = symlink_atomic(rel_path, link_path);
         if (r < 0)
                 return r;
 
