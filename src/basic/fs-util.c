@@ -223,6 +223,26 @@ int readlink_and_make_absolute(const char *p, char **r) {
         return 0;
 }
 
+int readlink_and_normalize(const char *p, char **r) {
+        _cleanup_free_ char *t = NULL;
+        char *s;
+        int j;
+
+        assert(p);
+        assert(r);
+
+        j = readlink_and_make_absolute(p, &t);
+        if (j < 0)
+                return j;
+
+        j = path_normalize(t, &s);
+        if (j < 0)
+                return j;
+
+        *r = s;
+        return 0;
+}
+
 int readlink_and_canonicalize(const char *p, char **r) {
         char *t, *s;
         int j;
