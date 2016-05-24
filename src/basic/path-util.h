@@ -41,6 +41,7 @@ bool path_is_absolute(const char *p) _pure_;
 char* path_make_absolute(const char *p, const char *prefix);
 int path_make_absolute_cwd(const char *p, char **ret);
 int path_make_relative(const char *from_dir, const char *to_path, char **_r);
+int path_normalize(const char *name, char **ret);
 char* path_kill_slashes(char *path);
 char* path_startswith(const char *path, const char *prefix) _pure_;
 int path_compare(const char *a, const char *b) _pure_;

@@ -196,6 +196,116 @@ int path_make_relative(const char *from_dir, const char *to_path, char **_r) {
         return 0;
 }
 
+int path_normalize(const char *name, char **ret) {
+        char *r, *dest, *apex;
+        const char *start, *end, *r_limit;
+        long path_max;
+        size_t seg_len, append_len;
+
+        assert(name);
+        assert(ret);
+
+        path_max = pathconf(name, _PC_PATH_MAX);
+        if (path_max <= 0)
+                path_max = 1024;
+
+        r = dest = malloc(path_max);
+        if (!r)
+                return -ENOMEM;
+        r_limit = r + path_max;
+
+        dest = r;
+        start = end = name;
+        if (path_is_absolute(name)) {
+                *dest++ = '/';
+        } else {
+                for (; *start; start = end) {
+                        /* Skip sequence of multiple path-separators. */
+                        while (*start == '/')
+                                ++start;
+
+                        /* Find end of path component. */
+                        for (end = start; *end && *end != '/'; ++end);
+
+                        if (end - start == 2 && start[0] == '.' && start[1] == '.') {
+                                /* If the segment was ../, add it to the result path */
+                                if (dest + 3 >= r_limit) {
+                                        const size_t new_size = r_limit - r + path_max;
+                                        char *const new_r = (char*)realloc(r, new_size);
+                                        if (!new_r) {
+                                                free(r);
+                                                return -ENOMEM;
+                                        }
+                                        dest += new_r - r;
+                                        r = new_r;
+                                        r_limit = r + new_size;
+                                }
+
+                                *dest++ = '.', *dest++ = '.', *dest++ = '/';
+                        } else if (end - start != 1 || start[0] != '.') {
+                                /* If the segment was not ./ or ../, we have reached the apex */
+                                break;
+                        }
+                }
+        }
+
+        *dest = '\0';
+        apex = dest;
+
+        for (; *start; start = end) {
+                /* Skip sequence of multiple path-separators. */
+                while (*start == '/')
+                        ++start;
+
+                /* Find end of path component. */
+                for (end = start; *end && *end != '/'; ++end);
+
+                seg_len = end - start;
+                if (seg_len == 0)
+                        break;
+                else if (seg_len == 1 && start[0] == '.')
+                        continue;
+                else if (seg_len == 2 && start[0] == '.' && start[1] == '.') {
+                        /* Back up to previous component, ignore if at apex already. */
+                        if (dest > apex) {
+                                dest--;
+                                for (; dest > apex && dest[-1] != '/'; dest--);
+                                continue;
+                        }
+                }
+
+                append_len = seg_len + 1;
+                if (dest + append_len >= r_limit) {
+                        const size_t new_size = r_limit - r +
+                                ((append_len > (size_t)path_max) ? append_len : (size_t)path_max);
+                        char *const new_r = (char*)realloc(r, new_size);
+                        if (!new_r) {
+                                free(r);
+                                return -ENOMEM;
+                        }
+                        apex += new_r - r;
+                        dest += new_r - r;
+                        r = new_r;
+                        r_limit = r + new_size;
+                }
+
+                dest = mempcpy(dest, start, seg_len);
+                *dest++ = '/';
+                *dest = '\0';
+
+                /* If we're adding an extra ../ to the prefix, move the apex along. */
+                if (seg_len == 2 && start[0] == '.' && start[1] == '.')
+                        apex = dest;
+        }
+
+        if (dest > r + 1 && dest[-1] == '/')
+                --dest;
+        *dest = '\0';
+
+        *ret = r;
+        return 0;
+}
+
 int path_strv_make_absolute_cwd(char **l) {
         char **s;
         int r;

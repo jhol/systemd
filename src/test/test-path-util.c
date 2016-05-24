@@ -233,6 +233,35 @@ static void test_make_relative(void) {
         assert_make_relative("//extra/////slashes///won't////fool///anybody//", "////extra///slashes////are/just///fine///", "../../../are/just/fine");
 }
 
+static void test_normalize(void) {
+#define assert_normalize(path, expected) {     \
+                _cleanup_free_ char *z = NULL; \
+                path_normalize(path, &z);      \
+                assert_se(streq(z, expected)); \
+        }
+
+        assert_normalize("", "");
+        assert_normalize(".", "");
+        assert_normalize("/", "/");
+        assert_normalize("/foo", "/foo");
+        assert_normalize("/foo/", "/foo");
+        assert_normalize("/foo/bar", "/foo/bar");
+        assert_normalize("//////foo//////bar", "/foo/bar");
+        assert_normalize("/foo/./bar", "/foo/bar");
+        assert_normalize("/foo/../bar", "/bar");
+        assert_normalize("/foo/../../bar", "/../bar");
+        assert_normalize("/foo/.././../bar", "/../bar");
+        assert_normalize("/foo/../../../bar", "/../../bar");
+        assert_normalize("foo", "foo");
+        assert_normalize("foo/", "foo");
+        assert_normalize("./foo", "foo");
+        assert_normalize("./foo/", "foo");
+        assert_normalize("./foo/../bar", "bar");
+        assert_normalize("foo/.././.././../bar", "../../bar");
+        assert_normalize("../../foo/../../bar", "../../../bar");
+        assert_normalize("./.././../foo/../../bar", "../../../bar");
+}
+
 static void test_strv_resolve(void) {
         char tmp_dir[] = "/tmp/test-path-util-XXXXXX";
         _cleanup_strv_free_ char **search_dirs = NULL;
@@ -517,6 +546,7 @@ int main(int argc, char **argv) {
         test_path_join();
         test_fsck_exists();
         test_make_relative();
+        test_normalize();
         test_strv_resolve();
         test_path_startswith();
         test_prefix_root();
